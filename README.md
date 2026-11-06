@@ -6,14 +6,15 @@ Substitui o worker antigo do servidor (`like-repost-instagram`, que usava a API 
 
 ## Como funciona
 
-1. A lista de posts vem do app do Brechó (as peças com o link do post, **vendidas também**).
+1. A lista de posts sai do **perfil do brechó**, lido uma vez por run na primeira conta (**vendidas
+   também**). Peça com `#p` usa o nome e o link do app do Brechó; o que faltar (drop recém-postado
+   ainda não tem link no app) o bot copia pelo botão de compartilhar. Os fixados saem pela data.
 2. O modo escolhe quais entram:
-   - **drop**: as peças do último drop **+ o pré-drop** (o post de divulgação sem `#p`, ex. "drop
-     hoje às 21h!"). O pré-drop é achado lendo o topo do perfil do brechó uma vez por run: entra
-     todo post sem `#p` publicado depois do último post do drop anterior (o fixado sai pela data).
-     Se o pré-drop do próximo drop já saiu e as peças ainda não, a run faz só ele;
-   - **recentes**: os N posts mais novos;
-   - ou um **post inicial** (link ou código): daquele post em diante.
+   - **drop**: do post mais novo até o primeiro **pré-drop**, ele incluso (pré-drop = legenda sem
+     `#p` que fala de "drop"). Se o mais novo já é um pré-drop, o drop dele ainda não saiu e a run
+     faz só ele. Sem pré-drop à vista, usa as peças do último drop do app do Brechó;
+   - **recentes**: os N primeiros do perfil, de qualquer tipo;
+   - ou um **post inicial** (link ou código, pela lista do app do Brechó): daquele post em diante.
 3. Em cada conta: abre cada post pelo link, **confere** que é do brechó e é a peça certa, e só então:
    - **curte** (o botão vira "Gostei" — se já estava curtido, não toca: tocar de novo descurte);
    - **republica** (prova = a foto da conta aparecendo sobre o post "<conta> partilhou"; tocar de
