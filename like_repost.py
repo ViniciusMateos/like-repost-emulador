@@ -202,6 +202,103 @@ def achar_pre_drop(d, pecas, log=None, folga=6):
     return sorted(achados.values(), key=lambda x: x["ts"])
 
 
+_RE_DROP = re.compile(r"\bdrop\b", re.I)
+FIXADOS_MAX = 3                     # o IG deixa fixar até 3 posts no topo do perfil
+
+
+def posts_do_perfil(d, pecas, selecao="drop", n=0, log=None, parar=None, teto=80):
+    """Lista de posts LIDA DO PERFIL do brechó (05/11, regra do Vinicius) — o que está publicado de
+    verdade, não o que o app do Brechó tem cadastrado (o 'recentes' nem abria o perfil e o pré-drop
+    não é peça):
+      - drop: do post mais novo até o 1º PRÉ-DROP, ele incluso. Se o mais novo (tirando os fixados)
+        já é um pré-drop, o drop dele ainda não saiu → só o pré-drop. Rodando de novo depois do drop:
+        as peças novas + o pré-drop (o que cada conta já fez ela pula).
+      - recentes: os N mais novos, de qualquer tipo.
+    Pré-drop = legenda SEM #p que fala de "drop". Fixados entram pela DATA do shortcode: tudo é
+    ordenado por data, então o fixado antigo ("seja bem-vindo", fev/2025) cai lá pra trás e não entra.
+    Peça com #p conhecida no app do Brechó usa o code de lá; o resto copia o link pelo share.
+    Devolve do mais antigo pro mais novo [{code, nome, ts, rotulo?}]; None se não achou pré-drop no
+    modo drop (o chamador cai pro app do Brechó). Nunca levanta."""
+    from bots.brecho_scraper import brecho_scraper as bs
+    sel_drop = str(selecao).lower() != "recentes"
+    n = int(n or 0)
+    # TODAS as peças com #p (com ou sem link ainda): drop recém-postado está no app sem o code (05/11
+    # run-588) — o nome vem de lá; o code, se faltar, copia pelo share
+    por_num = {p.get("num"): p for p in pecas or [] if p.get("num")}
+    lidos = []
+    try:
+        bs.abrir_perfil(d, log=None)
+        bs.entrar_no_feed(d, None)
+        nav = bs.Navegador(d, log=None)
+        for idx in range(teto):
+            if parar and parar():
+                break
+            if nav.garantir_post():
+                leg = bs.ler_legenda_atual(d, None) or ""
+                num = bs._num_peca(leg)
+                peca = por_num.get(num) if num is not None else None
+                code = (peca or {}).get("code") or bs._copiar_shortcode(d, None)
+                if code:
+                    pre = num is None and bool(_RE_DROP.search(leg))
+                    nome = ""
+                    if num is not None:
+                        # SEM o "#pN " na frente: o ler_post confere o nome DENTRO da legenda e
+                        # "#p485 boné s" nunca bate → "o link não abriu" em toda peça (05/11 run-588)
+                        nome = ((peca or {}).get("nome")
+                                or re.sub(r"^#p\d+\s*", "", bs._desc_peca(leg, num)[0]))
+                    x = {"code": code, "nome": nome, "ts": ts_do_shortcode(code), "idx": idx}
+                    if pre:
+                        x["rotulo"] = "pré-drop"
+                    lidos.append(x)
+                    _log(log, f"  perfil {idx + 1}: " + ("PRÉ-DROP" if pre else (f"#p{num}" if num else "post"))
+                         + f" {code}")
+            if sel_drop:
+                pres = [x for x in lidos if x.get("rotulo")]
+                if pres:
+                    b = max(pres, key=lambda x: x["ts"])
+                    # passou do pré-drop na linha do tempo (fora da zona dos fixados) → já tem tudo
+                    if b["idx"] >= FIXADOS_MAX or any(x["idx"] >= FIXADOS_MAX and x["ts"] < b["ts"] for x in lidos):
+                        break
+            elif len(lidos) >= (n or PADRAO["quantos_posts"]) + FIXADOS_MAX:
+                break
+            if not nav.avancar():
+                break
+    except Exception as e:
+        _log(log, f"não consegui ler o perfil do brechó ({e})")
+    for _ in range(3):
+        d.press("back")
+        _sleep(0.6, 1.0)
+    crono = sorted(lidos, key=lambda x: -x["ts"])
+    if sel_drop:
+        sel = []
+        for x in crono:
+            sel.append(x)
+            if x.get("rotulo"):
+                break
+        else:
+            _log(log, f"modo drop: li {len(lidos)} post(s) do perfil e não achei pré-drop")
+            return None
+        if n:
+            sel = sel[:n]
+        n_pre = sum(1 for x in sel if x.get("rotulo"))
+        if len(sel) == 1 and n_pre:
+            _log(log, "modo drop: o post mais novo é o PRÉ-DROP (o drop ainda não saiu) → só ele")
+        else:
+            _log(log, f"modo drop: {len(sel) - n_pre} post(s) do drop" + (" + o pré-drop dele" if n_pre else ""))
+    else:
+        # na ORDEM DO PERFIL (o que ele vê): peças postadas no mesmo minuto não batem certinho com a
+        # data do shortcode. Fixado = um dos 3 do topo bem mais velho (>6h) que um post abaixo dele.
+        def fixado(x):
+            return x["idx"] < FIXADOS_MAX and any(y["idx"] > x["idx"] and y["ts"] - x["ts"] > 6 * 3600
+                                                  for y in lidos)
+        linha = [x for x in sorted(lidos, key=lambda x: x["idx"]) if not fixado(x)]
+        sel = linha[:n or PADRAO["quantos_posts"]]
+        _log(log, f"modo recentes: os {len(sel)} posts mais novos do perfil do brechó")
+    for x in sel:
+        x.pop("idx", None)
+    return sorted(sel, key=lambda x: x["ts"])
+
+
 # ─────────────────────────────────── tela do post ───────────────────────────────────
 def _norm(s):
     import html
