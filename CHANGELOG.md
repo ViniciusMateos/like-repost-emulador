@@ -1,5 +1,14 @@
 # Changelog
 
+## [1.1.0] — 2026-11-06
+
+### Adicionado
+- feat: os modos drop e recentes leem o **perfil do brechó** — o drop vai do post mais novo até o primeiro pré-drop (se o mais novo já é o pré-drop, faz só ele) e o recentes pega os N primeiros do perfil
+- feat: peça sem link no app do Brechó (drop recém-postado) copia o link pelo botão de compartilhar
+
+### Documentação
+- docs: README com a lista lida do perfil
+
 ## [1.0.0] — 2026-10-31
 
 ### Adicionado
