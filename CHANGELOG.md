@@ -1,5 +1,13 @@
 # Changelog
 
+## [1.1.1] — 2026-11-13
+
+### Modificado
+- perf: a lista do perfil do brechó fica guardada — se os 4 primeiros posts são os mesmos da última leitura, usa a lista guardada e não lê o perfil inteiro de novo (vale 7 dias)
+
+### Documentação
+- docs: README com a lista guardada do perfil
+
 ## [1.1.0] — 2026-11-06
 
 ### Adicionado
