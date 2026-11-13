@@ -9,6 +9,8 @@ Substitui o worker antigo do servidor (`like-repost-instagram`, que usava a API 
 1. A lista de posts sai do **perfil do brechó**, lido uma vez por run na primeira conta (**vendidas
    também**). Peça com `#p` usa o nome e o link do app do Brechó; o que faltar (drop recém-postado
    ainda não tem link no app) o bot copia pelo botão de compartilhar. Os fixados saem pela data.
+   A leitura fica guardada em `like_repost_perfil.json`: se os 4 primeiros posts do perfil são os
+   mesmos da última vez, o bot usa a lista guardada e não lê o resto (vale por 7 dias).
 2. O modo escolhe quais entram:
    - **drop**: do post mais novo até o primeiro **pré-drop**, ele incluso (pré-drop = legenda sem
      `#p` que fala de "drop"). Se o mais novo já é um pré-drop, o drop dele ainda não saiu e a run
