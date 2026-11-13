@@ -45,6 +45,10 @@ PADRAO = {
 MAX_FALHAS_SEGUIDAS = 2             # 2 curtidas/reposts seguidos que não colaram = soft-block
 
 _ESTADO_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "like_repost_feitos.json")
+# última leitura do perfil do brechó: {chave: "drop|0", primeiros: [code...], lidos: [...], ts}
+_PERFIL_CACHE = os.path.join(os.path.dirname(_ESTADO_PATH), "like_repost_perfil.json")
+_CACHE_PRIMEIROS = 4            # o fixado + os mais novos: se esses não mudaram, o perfil não mudou
+_CACHE_VALIDADE = 7 * 24 * 3600
 _B64 = "ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789-_"
 
 
@@ -206,6 +210,26 @@ _RE_DROP = re.compile(r"\bdrop\b", re.I)
 FIXADOS_MAX = 3                     # o IG deixa fixar até 3 posts no topo do perfil
 
 
+def _cache_ler(chave):
+    try:
+        with open(_PERFIL_CACHE, "r", encoding="utf-8") as f:
+            c = json.load(f)
+    except Exception:
+        return None
+    if c.get("chave") != chave or time.time() - float(c.get("ts") or 0) > _CACHE_VALIDADE:
+        return None
+    return c
+
+
+def _cache_salvar(chave, lidos):
+    try:
+        with open(_PERFIL_CACHE, "w", encoding="utf-8") as f:
+            json.dump({"chave": chave, "ts": time.time(), "lidos": lidos,
+                       "primeiros": [x["code"] for x in lidos[:_CACHE_PRIMEIROS]]}, f, ensure_ascii=False)
+    except Exception:
+        pass
+
+
 def posts_do_perfil(d, pecas, selecao="drop", n=0, log=None, parar=None, teto=80):
     """Lista de posts LIDA DO PERFIL do brechó (05/11, regra do Vinicius) — o que está publicado de
     verdade, não o que o app do Brechó tem cadastrado (o 'recentes' nem abria o perfil e o pré-drop
@@ -226,6 +250,9 @@ def posts_do_perfil(d, pecas, selecao="drop", n=0, log=None, parar=None, teto=80
     # run-588) — o nome vem de lá; o code, se faltar, copia pelo share
     por_num = {p.get("num"): p for p in pecas or [] if p.get("num")}
     lidos = []
+    chave = f"{'drop' if sel_drop else 'recentes'}|{n}"
+    cache = _cache_ler(chave)
+    do_cache = False
     try:
         bs.abrir_perfil(d, log=None)
         bs.entrar_no_feed(d, None)
@@ -252,6 +279,14 @@ def posts_do_perfil(d, pecas, selecao="drop", n=0, log=None, parar=None, teto=80
                     lidos.append(x)
                     _log(log, f"  perfil {idx + 1}: " + ("PRÉ-DROP" if pre else (f"#p{num}" if num else "post"))
                          + f" {code}")
+            # 09/11: os primeiros posts iguais aos da última leitura = o perfil não mudou → lista guardada
+            if (cache and len(lidos) == _CACHE_PRIMEIROS
+                    and [x["code"] for x in lidos] == cache.get("primeiros")):
+                lidos = [dict(x) for x in cache.get("lidos") or []]
+                do_cache = True
+                _log(log, f"  os {_CACHE_PRIMEIROS} primeiros posts são os mesmos da última leitura — uso a "
+                          f"lista guardada ({len(lidos)} posts) e não leio o resto")
+                break
             if sel_drop:
                 pres = [x for x in lidos if x.get("rotulo")]
                 if pres:
@@ -268,6 +303,8 @@ def posts_do_perfil(d, pecas, selecao="drop", n=0, log=None, parar=None, teto=80
     for _ in range(3):
         d.press("back")
         _sleep(0.6, 1.0)
+    if not do_cache and len(lidos) >= _CACHE_PRIMEIROS:
+        _cache_salvar(chave, [dict(x) for x in lidos])
     crono = sorted(lidos, key=lambda x: -x["ts"])
     if sel_drop:
         sel = []
